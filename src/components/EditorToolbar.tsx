@@ -1,4 +1,3 @@
-
 import { Editor } from '@tiptap/react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,29 +11,45 @@ import {
   Table, 
   Download,
   FileText,
-  Loader2
+  Loader2,
+  Upload
 } from 'lucide-react';
 import { useRef } from 'react';
 
 interface EditorToolbarProps {
   editor: Editor;
   onImageUpload: (file: File) => void;
+  onDocumentUpload: (file: File) => void;
   onExportPDF: () => void;
   onExportWord: () => void;
   isExporting: boolean;
 }
 
-export const EditorToolbar = ({ editor, onImageUpload, onExportPDF, onExportWord, isExporting }: EditorToolbarProps) => {
+export const EditorToolbar = ({ editor, onImageUpload, onDocumentUpload, onExportPDF, onExportWord, isExporting }: EditorToolbarProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleDocumentClick = () => {
+    documentInputRef.current?.click();
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
       onImageUpload(file);
+    }
+    // Reset the input
+    event.target.value = '';
+  };
+
+  const handleDocumentChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      onDocumentUpload(file);
     }
     // Reset the input
     event.target.value = '';
@@ -55,6 +70,20 @@ export const EditorToolbar = ({ editor, onImageUpload, onExportPDF, onExportWord
 
   return (
     <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 border rounded-lg">
+      {/* Upload Document */}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleDocumentClick}
+        disabled={isExporting}
+        className="bg-purple-50 hover:bg-purple-100 border-purple-200"
+      >
+        <Upload className="h-4 w-4 mr-1" />
+        Upload Word
+      </Button>
+
+      <Separator orientation="vertical" className="h-6" />
+
       {/* Font Family */}
       <Select
         value={editor.getAttributes('textStyle').fontFamily || 'Arial'}
@@ -210,6 +239,14 @@ export const EditorToolbar = ({ editor, onImageUpload, onExportPDF, onExportWord
         type="file"
         accept="image/*"
         onChange={handleFileChange}
+        className="hidden"
+      />
+
+      <Input
+        ref={documentInputRef}
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        onChange={handleDocumentChange}
         className="hidden"
       />
     </div>
