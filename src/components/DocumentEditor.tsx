@@ -7,6 +7,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Image from '@tiptap/extension-image';
 import TextStyle from '@tiptap/extension-text-style';
+import Underline from '@tiptap/extension-underline';
 import { FontFamily } from '@tiptap/extension-font-family';
 import { EditorToolbar } from './EditorToolbar';
 import { useState, useCallback } from 'react';
@@ -21,6 +22,7 @@ const DocumentEditor = () => {
     extensions: [
       StarterKit,
       TextStyle,
+      Underline,
       FontFamily.configure({
         types: ['textStyle'],
       }),
@@ -73,23 +75,51 @@ const DocumentEditor = () => {
       const editorElement = document.querySelector('.ProseMirror') as HTMLElement;
       if (!editorElement) throw new Error('Editor content not found');
 
-      // Create a temporary container with white background for better PDF rendering
+      // Create a temporary container that matches the editor styling exactly
       const tempContainer = document.createElement('div');
       tempContainer.style.position = 'absolute';
       tempContainer.style.left = '-9999px';
       tempContainer.style.background = 'white';
-      tempContainer.style.padding = '40px';
-      tempContainer.style.width = '210mm'; // A4 width
+      tempContainer.style.padding = '32px';
+      tempContainer.style.width = '794px'; // A4 width in pixels at 96 DPI
+      tempContainer.style.fontFamily = 'Times New Roman, serif';
+      tempContainer.style.fontSize = '16px';
+      tempContainer.style.lineHeight = '1.6';
+      tempContainer.style.color = '#000000';
+      
+      // Copy the editor content and apply consistent styling
       tempContainer.innerHTML = editorElement.innerHTML;
+      
+      // Apply consistent styles to all elements in the temp container
+      const style = document.createElement('style');
+      style.textContent = `
+        .temp-pdf-container h1 { font-size: 32px; font-weight: bold; margin: 24px 0 16px 0; color: #1f2937; }
+        .temp-pdf-container h2 { font-size: 24px; font-weight: bold; margin: 20px 0 12px 0; color: #374151; }
+        .temp-pdf-container h3 { font-size: 20px; font-weight: bold; margin: 16px 0 8px 0; color: #4b5563; }
+        .temp-pdf-container p { margin: 12px 0; }
+        .temp-pdf-container ul, .temp-pdf-container ol { margin: 12px 0; padding-left: 24px; }
+        .temp-pdf-container li { margin: 4px 0; }
+        .temp-pdf-container strong { font-weight: bold; }
+        .temp-pdf-container em { font-style: italic; }
+        .temp-pdf-container u { text-decoration: underline; }
+        .temp-pdf-container table { border-collapse: collapse; margin: 16px 0; width: 100%; }
+        .temp-pdf-container table td, .temp-pdf-container table th { border: 2px solid #e5e7eb; padding: 8px 12px; }
+        .temp-pdf-container table th { background-color: #f9fafb; font-weight: bold; }
+        .temp-pdf-container img { max-width: 100%; height: auto; margin: 16px 0; }
+      `;
+      tempContainer.className = 'temp-pdf-container';
+      document.head.appendChild(style);
       document.body.appendChild(tempContainer);
 
       const canvas = await html2canvas(tempContainer, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
+        logging: false,
       });
 
       document.body.removeChild(tempContainer);
+      document.head.removeChild(style);
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
