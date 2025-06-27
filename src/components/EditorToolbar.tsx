@@ -11,6 +11,7 @@ import {
   Image as ImageIcon, 
   Table, 
   Download,
+  FileText,
   Loader2
 } from 'lucide-react';
 import { useRef } from 'react';
@@ -19,10 +20,11 @@ interface EditorToolbarProps {
   editor: Editor;
   onImageUpload: (file: File) => void;
   onExportPDF: () => void;
+  onExportWord: () => void;
   isExporting: boolean;
 }
 
-export const EditorToolbar = ({ editor, onImageUpload, onExportPDF, isExporting }: EditorToolbarProps) => {
+export const EditorToolbar = ({ editor, onImageUpload, onExportPDF, onExportWord, isExporting }: EditorToolbarProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageClick = () => {
@@ -176,7 +178,20 @@ export const EditorToolbar = ({ editor, onImageUpload, onExportPDF, isExporting 
 
       <Separator orientation="vertical" className="h-6" />
 
-      {/* Export */}
+      {/* Export Options */}
+      <Button
+        onClick={onExportWord}
+        disabled={isExporting}
+        className="bg-green-600 hover:bg-green-700"
+      >
+        {isExporting ? (
+          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+        ) : (
+          <FileText className="h-4 w-4 mr-1" />
+        )}
+        Word
+      </Button>
+
       <Button
         onClick={onExportPDF}
         disabled={isExporting}
@@ -187,7 +202,7 @@ export const EditorToolbar = ({ editor, onImageUpload, onExportPDF, isExporting 
         ) : (
           <Download className="h-4 w-4 mr-1" />
         )}
-        Export PDF
+        PDF
       </Button>
 
       <Input

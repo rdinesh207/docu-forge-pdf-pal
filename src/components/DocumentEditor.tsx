@@ -13,6 +13,7 @@ import { EditorToolbar } from './EditorToolbar';
 import { useState, useCallback } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { Document, Packer, Paragraph, TextRun, Table as DocxTable, TableRow as DocxTableRow, TableCell as DocxTableCell, HeadingLevel, AlignmentType } from 'docx';
 import { toast } from 'sonner';
 
 const DocumentEditor = () => {
@@ -46,7 +47,7 @@ const DocumentEditor = () => {
         <li>Change font family and formatting</li>
         <li>Add <strong>bold</strong>, <em>italic</em>, or <u>underlined</u> text</li>
         <li>Insert images and tables</li>
-        <li>Export your document as PDF</li>
+        <li>Export your document as PDF or Word document</li>
       </ul>
     `,
     editorProps: {
@@ -64,6 +65,115 @@ const DocumentEditor = () => {
     };
     reader.readAsDataURL(file);
   }, [editor]);
+
+  const convertEditorToDocx = () => {
+    if (!editor) return null;
+
+    const content = editor.getJSON();
+    const children: any[] = [];
+
+    const processContent = (nodes: any[]) => {
+      nodes.forEach(node => {
+        switch (node.type) {
+          case 'heading':
+            const headingLevel = node.attrs?.level || 1;
+            const headingLevels = [
+              HeadingLevel.HEADING_1,
+              HeadingLevel.HEADING_2,
+              HeadingLevel.HEADING_3,
+              HeadingLevel.HEADING_4,
+              HeadingLevel.HEADING_5,
+              HeadingLevel.HEADING_6
+            ];
+            children.push(
+              new Paragraph({
+                text: node.content?.[0]?.text || '',
+                heading: headingLevels[headingLevel - 1] || HeadingLevel.HEADING_1,
+              })
+            );
+            break;
+          case 'paragraph':
+            if (node.content && node.content.length > 0) {
+              const textRuns: TextRun[] = [];
+              node.content.forEach((textNode: any) => {
+                if (textNode.type === 'text') {
+                  textRuns.push(
+                    new TextRun({
+                      text: textNode.text,
+                      bold: textNode.marks?.some((mark: any) => mark.type === 'bold'),
+                      italics: textNode.marks?.some((mark: any) => mark.type === 'italic'),
+                      underline: textNode.marks?.some((mark: any) => mark.type === 'underline') ? {} : undefined,
+                    })
+                  );
+                }
+              });
+              children.push(new Paragraph({ children: textRuns }));
+            } else {
+              children.push(new Paragraph({ text: '' }));
+            }
+            break;
+          case 'bulletList':
+          case 'orderedList':
+            if (node.content) {
+              node.content.forEach((listItem: any) => {
+                if (listItem.content) {
+                  listItem.content.forEach((para: any) => {
+                    if (para.content && para.content[0]) {
+                      children.push(
+                        new Paragraph({
+                          text: `• ${para.content[0].text || ''}`,
+                        })
+                      );
+                    }
+                  });
+                }
+              });
+            }
+            break;
+        }
+      });
+    };
+
+    if (content.content) {
+      processContent(content.content);
+    }
+
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: children.length > 0 ? children : [new Paragraph({ text: 'Empty document' })],
+      }],
+    });
+
+    return doc;
+  };
+
+  const exportToWord = async () => {
+    if (!editor) return;
+    
+    setIsExporting(true);
+    toast('Generating Word document...');
+    
+    try {
+      const doc = convertEditorToDocx();
+      if (!doc) throw new Error('Failed to convert document');
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'document.docx';
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast('Word document exported successfully!');
+    } catch (error) {
+      console.error('Error exporting Word document:', error);
+      toast('Error exporting Word document. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const exportToPDF = async () => {
     if (!editor) return;
@@ -93,19 +203,19 @@ const DocumentEditor = () => {
       // Apply consistent styles to all elements in the temp container
       const style = document.createElement('style');
       style.textContent = `
-        .temp-pdf-container h1 { font-size: 32px; font-weight: bold; margin: 24px 0 16px 0; color: #1f2937; }
-        .temp-pdf-container h2 { font-size: 24px; font-weight: bold; margin: 20px 0 12px 0; color: #374151; }
-        .temp-pdf-container h3 { font-size: 20px; font-weight: bold; margin: 16px 0 8px 0; color: #4b5563; }
-        .temp-pdf-container p { margin: 12px 0; }
-        .temp-pdf-container ul, .temp-pdf-container ol { margin: 12px 0; padding-left: 24px; }
+        .temp-pdf-container h1 { font-size: 32px; font-weight: bold; margin: 24px 0 16px 0; color: #1f2937; page-break-after: avoid; }
+        .temp-pdf-container h2 { font-size: 24px; font-weight: bold; margin: 20px 0 12px 0; color: #374151; page-break-after: avoid; }
+        .temp-pdf-container h3 { font-size: 20px; font-weight: bold; margin: 16px 0 8px 0; color: #4b5563; page-break-after: avoid; }
+        .temp-pdf-container p { margin: 12px 0; page-break-inside: avoid; }
+        .temp-pdf-container ul, .temp-pdf-container ol { margin: 12px 0; padding-left: 24px; page-break-inside: avoid; }
         .temp-pdf-container li { margin: 4px 0; }
         .temp-pdf-container strong { font-weight: bold; }
         .temp-pdf-container em { font-style: italic; }
         .temp-pdf-container u { text-decoration: underline; }
-        .temp-pdf-container table { border-collapse: collapse; margin: 16px 0; width: 100%; }
+        .temp-pdf-container table { border-collapse: collapse; margin: 16px 0; width: 100%; page-break-inside: avoid; }
         .temp-pdf-container table td, .temp-pdf-container table th { border: 2px solid #e5e7eb; padding: 8px 12px; }
         .temp-pdf-container table th { background-color: #f9fafb; font-weight: bold; }
-        .temp-pdf-container img { max-width: 100%; height: auto; margin: 16px 0; }
+        .temp-pdf-container img { max-width: 100%; height: auto; margin: 16px 0; page-break-inside: avoid; }
       `;
       tempContainer.className = 'temp-pdf-container';
       document.head.appendChild(style);
@@ -116,6 +226,7 @@ const DocumentEditor = () => {
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
+        height: tempContainer.scrollHeight,
       });
 
       document.body.removeChild(tempContainer);
@@ -124,20 +235,49 @@ const DocumentEditor = () => {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 295; // A4 height in mm
+      const pageWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const margin = 10; // margin in mm
+      const imgWidth = pageWidth - (margin * 2);
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      let y = margin;
+      let remainingHeight = imgHeight;
+      let sourceY = 0;
 
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      while (remainingHeight > 0) {
+        const availableHeight = pageHeight - (margin * 2);
+        const sliceHeight = Math.min(remainingHeight, availableHeight);
+        
+        // Calculate the source height in canvas pixels
+        const sourceHeight = (sliceHeight * canvas.width) / imgWidth;
+        
+        // Create a temporary canvas for this slice
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sourceHeight;
+        const sliceCtx = sliceCanvas.getContext('2d');
+        
+        if (sliceCtx) {
+          sliceCtx.drawImage(
+            canvas,
+            0, sourceY,
+            canvas.width, sourceHeight,
+            0, 0,
+            canvas.width, sourceHeight
+          );
+          
+          const sliceImgData = sliceCanvas.toDataURL('image/png');
+          pdf.addImage(sliceImgData, 'PNG', margin, y, imgWidth, sliceHeight);
+        }
+
+        remainingHeight -= sliceHeight;
+        sourceY += sourceHeight;
+        
+        if (remainingHeight > 0) {
+          pdf.addPage();
+          y = margin;
+        }
       }
 
       pdf.save('document.pdf');
@@ -167,6 +307,7 @@ const DocumentEditor = () => {
             editor={editor} 
             onImageUpload={handleImageUpload}
             onExportPDF={exportToPDF}
+            onExportWord={exportToWord}
             isExporting={isExporting}
           />
         </div>
